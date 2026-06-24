@@ -12,11 +12,18 @@ from backend.app.p2.evaluate import evaluate_all
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Manufacturing export demo CLI")
     subparsers = parser.add_subparsers(dest="command")
-    subparsers.add_parser("p0", help="Validate demo data contracts and print statistics")
-    subparsers.add_parser("validate-data", help="Alias for p0")
+    holdout_help = "Use the hand-written holdout dataset instead of the synthetic default"
+    for name, help_text in (
+        ("p0", "Validate demo data contracts and print statistics"),
+        ("validate-data", "Alias for p0"),
+    ):
+        p0_parser = subparsers.add_parser(name, help=help_text)
+        p0_parser.add_argument("--holdout", action="store_true", help=holdout_help)
     run_parser = subparsers.add_parser("run", help="Run rule-based P1 pipeline for one inquiry")
     run_parser.add_argument("inquiry_id", help="Inquiry ID, for example INQ-SYN-001")
+    run_parser.add_argument("--holdout", action="store_true", help=holdout_help)
     eval_parser = subparsers.add_parser("eval", help="Evaluate P1 pipeline against gold answers")
+    eval_parser.add_argument("--holdout", action="store_true", help=holdout_help)
     eval_parser.add_argument(
         "--details",
         action="store_true",
@@ -32,13 +39,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command in {"p0", "validate-data"}:
-        summary = validate_demo_data()
+        summary = validate_demo_data(dataset=dataset_from(args))
         print_summary(summary)
         return 0 if summary["ok"] else 1
 
     if args.command == "run":
         try:
-            result = run_inquiry_pipeline(args.inquiry_id)
+            result = run_inquiry_pipeline(args.inquiry_id, dataset=dataset_from(args))
         except ValueError as error:
             print(f"Error: {error}", file=sys.stderr)
             return 1
@@ -46,7 +53,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "eval":
-        report = evaluate_all()
+        report = evaluate_all(dataset=dataset_from(args))
         if args.details:
             print(json.dumps(report, ensure_ascii=False, indent=2))
         else:
@@ -57,8 +64,13 @@ def main(argv: list[str] | None = None) -> int:
     return 1
 
 
+def dataset_from(args: argparse.Namespace) -> str:
+    return "holdout" if getattr(args, "holdout", False) else "default"
+
+
 def print_summary(summary: dict) -> None:
     print("P0 Data Contract Validation")
+    print(f"dataset: {summary.get('dataset', 'default')}")
     print()
 
     print("Files:")
@@ -96,6 +108,7 @@ def print_summary(summary: dict) -> None:
 def print_eval_summary(report: dict, max_failures: int) -> None:
     summary = report["summary"]
     print("P2 Evaluation Summary")
+    print(f"dataset: {report.get('dataset', 'default')}")
     print()
     for key, value in summary.items():
         print(f"  {key}: {value}")
@@ -117,12 +130,24 @@ def failure_reasons(result: dict) -> list[str]:
     if result["field_check"]["accuracy"] != 1:
         fields = [failure["field"] for failure in result["field_check"]["failures"]]
         reasons.append(f"field mismatches={fields}")
-    if not result["product_candidate_check"]["all_gold_present"]:
-        reasons.append("product candidates missing")
-    if not result["risk_flag_check"]["all_gold_present"]:
-        reasons.append("risk flags missing")
-    if not result["missing_field_check"]["all_gold_present"]:
-        reasons.append("missing fields not fully detected")
+
+    product_check = result["product_candidate_check"]
+    if not product_check["all_gold_present"]:
+        reasons.append(f"product candidates missing={product_check['false_negatives']}")
+
+    # Risk flags and missing fields gate on both misses and false positives, so
+    # report each side separately to make the failure actionable.
+    risk_check = result["risk_flag_check"]
+    if not risk_check["all_gold_present"]:
+        reasons.append(f"risk flags missing={risk_check['false_negatives']}")
+    if risk_check["false_positives"]:
+        reasons.append(f"risk false positives={risk_check['false_positives']}")
+
+    missing_check = result["missing_field_check"]
+    if not missing_check["all_gold_present"]:
+        reasons.append(f"missing fields not detected={missing_check['false_negatives']}")
+    if missing_check["false_positives"]:
+        reasons.append(f"missing-field false positives={missing_check['false_positives']}")
     return reasons
 
 

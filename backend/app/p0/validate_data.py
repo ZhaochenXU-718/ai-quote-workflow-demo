@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from backend.app.data.loaders import DATA_PATHS, load_demo_data
+from backend.app.data.loaders import DATA_PATHS, DATASET_PATHS, load_demo_data
 
 
 REQUIRED_PRODUCT_FIELDS = [
@@ -32,10 +32,11 @@ REQUIRED_INQUIRY_FIELDS = [
 ]
 
 
-def validate_demo_data(root_dir: Path | None = None) -> dict[str, Any]:
-    data = load_demo_data(root_dir or Path.cwd())
+def validate_demo_data(root_dir: Path | None = None, dataset: str = "default") -> dict[str, Any]:
+    data = load_demo_data(root_dir, dataset=dataset)
     errors: list[str] = []
     warnings: list[str] = []
+    file_specs = {**DATA_PATHS, **DATASET_PATHS[dataset]}
 
     product_ids = collect_unique_ids(data.products, "product_id", "products", errors)
     risk_rule_ids = collect_unique_ids(data.risk_rules, "id", "risk rules", errors)
@@ -50,7 +51,8 @@ def validate_demo_data(root_dir: Path | None = None) -> dict[str, Any]:
     validate_risk_rules(data.risk_rules, errors)
 
     return {
-        "files": {key: str(value) for key, value in DATA_PATHS.items()},
+        "dataset": dataset,
+        "files": {key: str(value) for key, value in file_specs.items()},
         "counts": {
             "products": len(data.products),
             "product_docs": len(data.product_docs),

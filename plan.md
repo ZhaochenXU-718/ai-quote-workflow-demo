@@ -122,7 +122,7 @@ python3 -m backend.app.cli run INQ-SYN-001
 
 - 抽取产品、数量、国家、应用、尺寸、材质、压力等级、连接方式、认证、交期。
 - 根据产品类型、材质、连接方式匹配候选产品。
-- 命中缺字段、短交期、认证不支持、低于 MOQ、非标材质、非标尺寸、多产品询盘、价格承诺审批等风险规则。
+- 命中缺字段、短交期、认证不支持、低于 MOQ、非标材质、非标尺寸、多产品询盘、过度承诺（restricted_claim，识别客户索要 guarantee/legally binding 等承诺）、价格承诺审批等风险规则（risk_rules.yaml 里 10 条规则现已全部为活规则，无死规则）。
 - 生成澄清问题。
 - 输出结构化 JSON。
 
@@ -165,9 +165,18 @@ python3 -m backend.app.cli run INQ-SYN-001
 |---|---|
 | field_accuracy | 核心字段抽取准确率 |
 | product_candidate_hit_rate | 候选产品命中率 |
-| risk_flag_recall | 风险规则召回率 |
-| missing_field_recall | 缺失字段召回率 |
+| product_candidate_precision / recall / f1 | 候选产品精确率/召回率/F1 |
+| risk_flag_precision / recall / f1 | 风险规则精确率/召回率/F1 |
+| risk_false_positive_inquiries | 出现风险误报的询盘数 |
+| missing_field_precision / recall / f1 | 缺失字段精确率/召回率/F1 |
+| missing_field_false_positive_inquiries | 出现缺失字段误报的询盘数 |
 | pass_rate | 综合通过率 |
+
+pass 判定策略：
+
+- 字段抽取必须完全正确。
+- 风险规则、缺失字段必须精确匹配（既不漏报也不误报），因为这两类误报对应“狼来了”和幻觉澄清问题，是高风险输出。
+- 候选产品只按召回率把关：检索阶段允许多返回候选交人工筛选，因此只报告其 precision/F1，不据此判失败。
 
 验收标准：
 
@@ -195,17 +204,66 @@ failed: 0
 pass_rate: 1.0
 field_accuracy: 1.0
 product_candidate_hit_rate: 1.0
+product_candidate_precision: 1.0
 product_candidate_recall: 1.0
+product_candidate_f1: 1.0
+risk_flag_precision: 1.0
 risk_flag_recall: 1.0
+risk_flag_f1: 1.0
+risk_false_positive_inquiries: 0
+missing_field_precision: 1.0
 missing_field_recall: 1.0
+missing_field_f1: 1.0
+missing_field_false_positive_inquiries: 0
 ```
+
+precision 全为 1.0 说明 P1 pipeline 与 generator 的输出是精确相等（不只是 gold ⊆ predicted 的超集），因此加入误报门槛后 pass_rate 仍为 1.0。
 
 当前边界：
 
 - 这组满分指标只说明 P1 pipeline 与当前合成数据/标准答案一致，适合作为工程回归基线。
 - 因为合成数据和 gold labels 都来自同一套规则体系，所以该指标不能证明系统能处理真实客户询盘。
-- 后续需要加入人工改写样本、扰动样本、真实脱敏样本，才能评估泛化能力。
-- P2 的核心价值是建立评测闭环：之后替换 P1 的正则抽取、加入 RAG 或 LLM 时，可以量化是否变好或变差。
+- 评测现在同时度量 precision/recall/F1 并把误报纳入 pass 判定：之后替换正则抽取、加入 RAG/LLM 时，过度命中（误报、幻觉缺失字段）会直接判失败，而不再被只看召回的旧逻辑掩盖。
+- 但 precision 指标仍受同源数据局限：它能挡住“相对当前 gold 的回归”，不能证明对真实询盘的精确率。仍需人工改写样本、扰动样本、真实脱敏样本评估泛化能力（这由下面的 holdout 评测集承担）。
+
+### P2 补充：手写 holdout 评测集
+
+状态：已完成。
+
+目标：用一套**脱离 generator、人工撰写 gold** 的询盘，度量系统的泛化能力，打破“自证”闭环。
+
+设计：
+
+- 数据位置：`sample-data/manufacturing_export/eval/holdout/`（`inquiries.jsonl` + `gold_answers.jsonl` + `README.md`）。
+- 共用同一套产品/规则/文档知识库，只替换询盘+gold；通过 `load_demo_data(dataset="holdout")` 切换。
+- 17 条询盘，每条针对 P1 正则 baseline 的一个已知弱点：单位不是 `pcs`、尺寸用英寸、交期用“three weeks”、产品缩写（SS/S\\S）、引用历史串扰、`and` 连接的多产品、`316L` 材质表达、应用语句不在模板句式内、`DN 50` 带空格，以及德/西/法/阿四种多语言询盘；其中 2 条预期通过——1 条“接近模板”的对照样本，1 条英文“要求 guarantee”的样本（用于正向验证 `restricted_claim` 护栏能正确触发）。
+- gold 是人工真值，**不允许为了让 baseline 通过而反向调参**（那会重新引入过拟合）。
+
+运行命令：
+
+```bash
+python3 -m backend.app.cli p0 --holdout
+python3 -m backend.app.cli eval --holdout
+python3 -m backend.app.cli run INQ-HOLD-001 --holdout
+```
+
+当前 baseline 结果（与 default 满分形成对照）：
+
+```text
+total_inquiries: 17
+passed: 2            (对照样本 INQ-HOLD-011 + restricted_claim 正向样本 INQ-HOLD-017)
+pass_rate: 0.1176
+field_accuracy: 0.8235
+product_candidate_precision: 0.6667  recall: 0.5556  f1: 0.6061
+risk_flag_precision: 0.6047  recall: 0.8387  f1: 0.7027  (12 条出现误报)
+missing_field_precision: 0.4167  recall: 1.0  f1: 0.5883  (7 条出现误报)
+```
+
+说明：
+
+- default=1.0 与 holdout≈0.08 的落差，就是当前系统真实泛化能力的诚实度量。
+- holdout 是诊断集，不是回归门槛：`eval --holdout` 在有失败时退出码非 0 属于预期；回归门槛仍是 default `eval`（必须保持全绿）。
+- 后续 P3 检索增强、P5 引入 LLM 后应重跑 holdout 看趋势；真实 POC 阶段再用客户脱敏样本替换/扩充这套 holdout。
 
 ## P3：证据检索 / 引用 MVP
 

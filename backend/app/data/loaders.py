@@ -8,6 +8,10 @@ from pathlib import Path
 from typing import Any
 
 
+# Repository root derived from this file (.../backend/app/data/loaders.py), so
+# the CLI and tools resolve data regardless of the current working directory.
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
 # Demo data is intentionally stored as flat files so the first pipeline can run
 # without databases or external services.
 DATA_ROOT = Path("sample-data/manufacturing_export")
@@ -19,6 +23,23 @@ DATA_PATHS = {
     "inquiries": Path("inquiries/synthetic_inquiries.jsonl"),
     "gold_answers": Path("eval/gold_answers.jsonl"),
     "email_templates": Path("templates/email_templates.md"),
+}
+
+# The knowledge base (products, docs, rules, templates) is shared across
+# datasets; only the inquiry/gold pair changes per dataset.
+DATASET_PATHS = {
+    "default": {
+        "inquiries": Path("inquiries/synthetic_inquiries.jsonl"),
+        "gold_answers": Path("eval/gold_answers.jsonl"),
+    },
+    # Hand-written holdout: phrasings the generator never produces, with gold
+    # derived by reading each email (not by the generator). It is expected to
+    # score below the synthetic dev set; that gap is the whole point, because it
+    # measures generalization instead of the system reproducing its own data.
+    "holdout": {
+        "inquiries": Path("eval/holdout/inquiries.jsonl"),
+        "gold_answers": Path("eval/holdout/gold_answers.jsonl"),
+    },
 }
 
 
@@ -107,15 +128,18 @@ def parse_email_template_names(text: str) -> list[str]:
     return [match.group(1).strip() for match in re.finditer(r"^##\s+(.+)$", text, re.MULTILINE)]
 
 
-def load_demo_data(root_dir: Path | None = None) -> DemoData:
-    root = root_dir or Path.cwd()
-    paths = {key: resolve_data_path(root, value) for key, value in DATA_PATHS.items()}
+def load_demo_data(root_dir: Path | None = None, dataset: str = "default") -> DemoData:
+    if dataset not in DATASET_PATHS:
+        raise ValueError(f"Unknown dataset: {dataset}. Expected one of {sorted(DATASET_PATHS)}.")
+    root = root_dir or PROJECT_ROOT
+    path_specs = {**DATA_PATHS, **DATASET_PATHS[dataset]}
+    paths = {key: resolve_data_path(root, value) for key, value in path_specs.items()}
 
     products = parse_csv(read_text(paths["products"]))
     product_docs = parse_product_docs(read_text(paths["product_docs"]))
     risk_rules = parse_risk_rules_yaml(read_text(paths["risk_rules"]))
-    inquiries = parse_jsonl(read_text(paths["inquiries"]), str(DATA_PATHS["inquiries"]))
-    gold_answers = parse_jsonl(read_text(paths["gold_answers"]), str(DATA_PATHS["gold_answers"]))
+    inquiries = parse_jsonl(read_text(paths["inquiries"]), str(path_specs["inquiries"]))
+    gold_answers = parse_jsonl(read_text(paths["gold_answers"]), str(path_specs["gold_answers"]))
     email_templates = parse_email_template_names(read_text(paths["email_templates"]))
 
     return DemoData(

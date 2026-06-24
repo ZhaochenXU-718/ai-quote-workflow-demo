@@ -1,0 +1,11 @@
+# Project metadata and the Python version floor. This demo is not packaged for
+# `pip install` yet; run it as a module from the repo root (see README.md).
+[project]
+name = "ai-quote-workflow-demo"
+version = "0.1.0"
+description = "Manufacturing-export inquiry-to-quote AI workflow demo (deterministic P1 pipeline + evaluation harness)."
+requires-python = ">=3.9"
+# Intentionally empty: the backend pipeline and evaluation use only the Python
+# standard library. Add dependencies here (and pin a higher Python) before
+# introducing typed config, a model gateway client, or a web framework.
+dependencies = []

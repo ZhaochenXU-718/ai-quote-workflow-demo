@@ -21,8 +21,12 @@ CONNECTION_TYPES = ["threaded", "flanged", "wafer", "lug"]
 CERTIFICATIONS = ["RoHS", "WRAS", "FDA", "UL", "CE"]
 
 
-def run_inquiry_pipeline(inquiry_id: str, root_dir: Path | None = None) -> dict[str, Any]:
-    data = load_demo_data(root_dir or Path.cwd())
+def run_inquiry_pipeline(
+    inquiry_id: str,
+    root_dir: Path | None = None,
+    dataset: str = "default",
+) -> dict[str, Any]:
+    data = load_demo_data(root_dir, dataset=dataset)
     inquiry = find_inquiry(data, inquiry_id)
     return run_pipeline_for_inquiry(inquiry, data)
 
@@ -265,6 +269,22 @@ def detect_risks(
             rule_by_id,
             "multi_product_inquiry",
             "Inquiry includes additional product or alternative product request.",
+        )
+
+    # restricted_claim: the customer is pushing for a guaranteed/binding commitment
+    # (delivery, compliance, certification) that we cannot promise deterministically.
+    # This stays a safety rail even after LLM drafting: any reply must not assert
+    # such a guarantee without human approval.
+    if re.search(
+        r"\b(guarantee|guaranteed|guarantees|legally binding|penalty clause)\b",
+        inquiry_text,
+        re.IGNORECASE,
+    ):
+        add_risk(
+            risk_flags,
+            rule_by_id,
+            "restricted_claim",
+            "Customer requests a guaranteed commitment that must not be promised without human approval.",
         )
 
     add_risk(
