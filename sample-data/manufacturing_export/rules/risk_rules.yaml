@@ -1,0 +1,51 @@
+rules:
+  - id: missing_required_specs
+    description: Product size, material grade, pressure rating, and connection type are required before quotation.
+    severity: high
+    action: ask_clarification
+
+  - id: delivery_shorter_than_standard
+    description: If requested delivery days are shorter than product standard lead time, do not commit delivery date.
+    severity: high
+    action: require_human_approval
+
+  - id: certification_not_supported
+    description: If requested certification is not listed in product certifications, flag the issue and ask for confirmation.
+    severity: high
+    action: require_human_approval
+
+  - id: quantity_below_moq
+    description: If requested quantity is below product MOQ, final quotation must be manually confirmed.
+    severity: medium
+    action: require_human_approval
+
+  - id: price_commitment_required_approval
+    description: AI-generated replies must not commit final price. They may only reference that a quotation will be prepared after confirmation.
+    severity: high
+    action: require_human_approval
+
+  - id: non_standard_material
+    description: If requested material is outside the product material field, classify the request as non-standard.
+    severity: medium
+    action: ask_clarification
+
+  - id: non_standard_size
+    description: If requested size is outside the product size range, classify the request as non-standard.
+    severity: medium
+    action: ask_clarification
+
+  - id: multi_product_inquiry
+    description: If the inquiry includes multiple product types, split the request into line items before drafting a reply.
+    severity: low
+    action: split_line_items
+
+  - id: unclear_application
+    description: If media, application, or operating environment is unclear, ask the customer to confirm usage conditions.
+    severity: medium
+    action: ask_clarification
+
+  - id: restricted_claim
+    description: Do not claim compliance, performance, or delivery terms not supported by product documents or approval.
+    severity: high
+    action: require_human_approval
+

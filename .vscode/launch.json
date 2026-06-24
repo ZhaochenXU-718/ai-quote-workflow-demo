@@ -1,0 +1,41 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "P0 Validate Data",
+        "type": "debugpy",
+        "request": "launch",
+        "module": "backend.app.cli",
+        "console": "integratedTerminal",
+        "cwd": "${workspaceFolder}",
+        "args": ["p0"]
+      },
+      {
+        "name": "P1 Run Inquiry",
+        "type": "debugpy",
+        "request": "launch",
+        "module": "backend.app.cli",
+        "console": "integratedTerminal",
+        "cwd": "${workspaceFolder}",
+        "args": ["run", "INQ-SYN-001"]
+      },
+      {
+        "name": "P2 Eval",
+        "type": "debugpy",
+        "request": "launch",
+        "module": "backend.app.cli",
+        "console": "integratedTerminal",
+        "cwd": "${workspaceFolder}",
+        "args": ["eval"]
+      },
+      {
+        "name": "P2 Eval Details",
+        "type": "debugpy",
+        "request": "launch",
+        "module": "backend.app.cli",
+        "console": "integratedTerminal",
+        "cwd": "${workspaceFolder}",
+        "args": ["eval", "--details"]
+      }
+    ]
+  }

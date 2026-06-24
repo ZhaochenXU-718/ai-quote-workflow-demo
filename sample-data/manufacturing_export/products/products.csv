@@ -1,0 +1,14 @@
+product_id,product_name,category,material,size_range,pressure_rating,connection_type,certifications,moq,standard_lead_time_days,price_band_usd,notes,source_type,source_url
+SV-BV-100,Stainless Steel Ball Valve,ball_valve,SS304,DN15-DN50,PN16,threaded,CE,100,20,8-18,standard threaded ball valve,synthetic,
+SV-BV-200,Stainless Steel Ball Valve,ball_valve,SS316,DN25-DN100,PN25,flanged,CE;RoHS,50,30,25-60,corrosion resistant flanged ball valve,synthetic,
+SV-BV-300,Carbon Steel Ball Valve,ball_valve,WCB,DN50-DN200,PN16,flanged,CE,30,35,40-120,heavy duty carbon steel ball valve,synthetic,
+SV-BF-100,Wafer Butterfly Valve,butterfly_valve,ductile_iron,DN50-DN300,PN16,wafer,CE,50,25,18-80,compact wafer butterfly valve,synthetic,
+SV-BF-200,Lug Butterfly Valve,butterfly_valve,ductile_iron,DN80-DN400,PN16,lug,CE;WRAS,30,30,35-140,lug type valve for water systems,synthetic,
+SV-CV-100,Swing Check Valve,check_valve,WCB,DN50-DN300,PN16,flanged,CE,30,28,30-150,swing check valve for water and oil,synthetic,
+SV-CV-200,Stainless Steel Check Valve,check_valve,SS304,DN25-DN150,PN16,threaded,CE;RoHS,50,25,18-90,threaded stainless steel check valve,synthetic,
+SV-GV-100,Rising Stem Gate Valve,gate_valve,WCB,DN50-DN300,PN16,flanged,CE,20,35,60-220,rising stem gate valve for industrial pipelines,synthetic,
+SV-GV-200,Stainless Steel Gate Valve,gate_valve,SS316,DN40-DN200,PN25,flanged,CE;RoHS,20,40,90-320,stainless steel gate valve for corrosive media,synthetic,
+SV-SV-100,Brass Solenoid Valve,solenoid_valve,brass,DN10-DN50,PN10,threaded,CE,100,18,12-45,electric solenoid valve for water and air,synthetic,
+SV-SV-200,Stainless Steel Solenoid Valve,solenoid_valve,SS304,DN15-DN80,PN16,threaded,CE;RoHS,80,25,25-95,stainless solenoid valve for food-grade applications,synthetic,
+SV-FT-100,Stainless Steel Flange,fitting,SS304,DN25-DN200,PN16,flanged,CE,200,15,5-30,standard stainless steel pipe flange,synthetic,
+
