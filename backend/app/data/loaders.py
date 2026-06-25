@@ -51,7 +51,7 @@ class DemoData:
     risk_rules: list[dict[str, str]]
     inquiries: list[dict[str, Any]]
     gold_answers: list[dict[str, Any]]
-    email_templates: list[str]
+    email_templates: list[dict[str, str]]
 
 
 def resolve_data_path(root_dir: Path, relative_path: Path) -> Path:
@@ -124,8 +124,22 @@ def parse_product_docs(text: str) -> dict[str, str]:
     return docs
 
 
-def parse_email_template_names(text: str) -> list[str]:
-    return [match.group(1).strip() for match in re.finditer(r"^##\s+(.+)$", text, re.MULTILINE)]
+def parse_email_templates(text: str) -> list[dict[str, str]]:
+    # TODO: Markdown templates are enough for P4. A real reply system should use
+    # versioned, approved templates with channel, language, and policy metadata.
+    templates: list[dict[str, str]] = []
+    sections = re.split(r"\n(?=##\s+)", text)
+    for section in sections:
+        match = re.search(r"^##\s+(.+)$", section, re.MULTILINE)
+        if not match:
+            continue
+        templates.append(
+            {
+                "name": match.group(1).strip(),
+                "body": section[match.end() :].strip(),
+            }
+        )
+    return templates
 
 
 def load_demo_data(root_dir: Path | None = None, dataset: str = "default") -> DemoData:
@@ -140,7 +154,7 @@ def load_demo_data(root_dir: Path | None = None, dataset: str = "default") -> De
     risk_rules = parse_risk_rules_yaml(read_text(paths["risk_rules"]))
     inquiries = parse_jsonl(read_text(paths["inquiries"]), str(path_specs["inquiries"]))
     gold_answers = parse_jsonl(read_text(paths["gold_answers"]), str(path_specs["gold_answers"]))
-    email_templates = parse_email_template_names(read_text(paths["email_templates"]))
+    email_templates = parse_email_templates(read_text(paths["email_templates"]))
 
     return DemoData(
         paths=paths,

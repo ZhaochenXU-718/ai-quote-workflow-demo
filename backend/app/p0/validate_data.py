@@ -4,6 +4,13 @@ from pathlib import Path
 from typing import Any
 
 from backend.app.data.loaders import DATA_PATHS, DATASET_PATHS, load_demo_data
+from backend.app.p4.reply_generator import (
+    CERTIFICATION_TEMPLATE,
+    DELIVERY_TEMPLATE,
+    MISSING_SPEC_TEMPLATE,
+    RESTRICTED_CLAIM_TEMPLATE,
+    STANDARD_TEMPLATE,
+)
 
 
 REQUIRED_PRODUCT_FIELDS = [
@@ -31,6 +38,14 @@ REQUIRED_INQUIRY_FIELDS = [
     "body",
 ]
 
+REQUIRED_EMAIL_TEMPLATES = [
+    STANDARD_TEMPLATE,
+    MISSING_SPEC_TEMPLATE,
+    DELIVERY_TEMPLATE,
+    CERTIFICATION_TEMPLATE,
+    RESTRICTED_CLAIM_TEMPLATE,
+]
+
 
 def validate_demo_data(root_dir: Path | None = None, dataset: str = "default") -> dict[str, Any]:
     data = load_demo_data(root_dir, dataset=dataset)
@@ -49,6 +64,7 @@ def validate_demo_data(root_dir: Path | None = None, dataset: str = "default") -
     validate_inquiry_gold_alignment(data.inquiries, data.gold_answers, inquiry_ids, gold_ids, errors)
     validate_gold_references(data.gold_answers, product_ids, risk_rule_ids, errors)
     validate_risk_rules(data.risk_rules, errors)
+    validate_email_templates(data.email_templates, errors)
 
     return {
         "dataset": dataset,
@@ -182,3 +198,14 @@ def validate_risk_rules(risk_rules: list[dict[str, str]], errors: list[str]) -> 
         if not rule.get("action"):
             errors.append(f"Risk rule {rule_id} is missing action")
 
+
+def validate_email_templates(templates: list[dict[str, str]], errors: list[str]) -> None:
+    names = {template.get("name") for template in templates}
+    for required_name in REQUIRED_EMAIL_TEMPLATES:
+        if required_name not in names:
+            errors.append(f"email_templates.md is missing template {required_name}")
+
+    for template in templates:
+        name = template.get("name", "<missing-name>")
+        if not template.get("body"):
+            errors.append(f"Email template {name} has empty body")

@@ -10,7 +10,7 @@ Dear {customer_name},
 
 Thank you for your inquiry.
 
-Based on the information provided, we have identified {matched_product} as a potential match for your requirement. Before preparing a formal quotation, please kindly confirm the following details:
+Based on the information provided, we have identified {matched_product} as a potential match for your requirement. Before preparing a formal quotation, please review the following notes:
 
 {clarification_questions}
 
@@ -58,6 +58,19 @@ Please confirm the exact certification standard and target market.
 Best regards,
 Sales Team
 
+## Restricted Commitment Review Required
+
+Dear {customer_name},
+
+Thank you for your inquiry.
+
+We noticed that your request includes a guarantee or binding commitment requirement. Before confirming any guaranteed delivery, compliance statement, certification commitment, or other binding term, our sales team will need to complete an internal review.
+
+We can continue checking the product fit based on the information provided, but any guarantee or binding commitment will be confirmed only after review and approval.
+
+Best regards,
+Sales Team
+
 ## Follow-up Email
 
 Subject: Follow-up on your valve inquiry
@@ -70,4 +83,3 @@ We are following up on your inquiry for {product_name}. Please let us know if yo
 
 Best regards,
 Sales Team
-

@@ -71,7 +71,7 @@ product_docs: 12
 risk_rules: 10
 inquiries: 50
 gold_answers: 50
-email_templates: 5
+email_templates: 6
 inquiries_and_gold_answers_match: True
 Result: OK
 ```
@@ -261,7 +261,7 @@ missing_field_precision: 0.4167  recall: 1.0  f1: 0.5883  (7 条出现误报)
 
 说明：
 
-- default=1.0 与 holdout≈0.08 的落差，就是当前系统真实泛化能力的诚实度量。
+- default=1.0 与 holdout≈0.12 的落差，就是当前系统真实泛化能力的诚实度量。
 - holdout 是诊断集，不是回归门槛：`eval --holdout` 在有失败时退出码非 0 属于预期；回归门槛仍是 default `eval`（必须保持全绿）。
 - 后续 P3 检索增强、P5 引入 LLM 后应重跑 holdout 看趋势；真实 POC 阶段再用客户脱敏样本替换/扩充这套 holdout。
 
@@ -370,6 +370,8 @@ P2 eval: pass_rate 1.0，指标未回退
 
 ## P4：模板版回复草稿生成
 
+状态：已完成。
+
 目标：先用模板生成可控草稿，再考虑 LLM 润色。
 
 流程：
@@ -395,9 +397,69 @@ matched product + missing fields + risk flags
 - 回复中不出现最终报价承诺。
 - 回复中不承诺高风险交期。
 
+实现文件：
+
+- `backend/app/p4/reply_generator.py`
+- `backend/app/p1/rule_pipeline.py`
+- `backend/app/data/loaders.py`
+- `sample-data/manufacturing_export/templates/email_templates.md`
+
+当前能力：
+
+- Pipeline 输出中新增 `reply_draft`。
+- `reply_draft.subject` / `reply_draft.body` 是客户邮件草稿。
+- `reply_draft.supporting_citations` 优先使用 `matched_by=["candidate_product"]` 的 citation，避免把关键词补充资料误当成最终候选。
+- `reply_draft.blocked_commitments` 明确列出不能承诺的事项，例如 `final_price`、`requested_delivery`、`certification_confirmation`、`guarantee_or_binding_commitment`。
+- `reply_draft.safety_notes` 给内部人工审批使用，不混入客户邮件正文。
+- 当前 50 条 default 样本可触发 4 类模板：标准回复、缺参数回复、交期确认回复、认证确认回复。
+
+当前边界：
+
+- P4 仍然是模板填充，不做语言润色、语义改写或多语言回复。
+- `customer_name` 暂时固定为 `Customer`，后续需要从邮件签名、CRM 或人工输入中获取。
+- 草稿只表达“潜在匹配”和“待确认事项”，不决定最终产品型号、最终价格、最终交期或认证可行性。
+- 后续 P5 可用 LLM 做措辞润色，但必须保留 `reply_policy`、`blocked_commitments` 和人工审批约束。
+
+运行命令：
+
+```bash
+python3 -m backend.app.cli run INQ-SYN-001
+python3 -m backend.app.cli run INQ-SYN-002
+python3 -m backend.app.cli run INQ-SYN-005
+python3 -m backend.app.cli run INQ-SYN-010
+```
+
 ## P5：模型网关
 
 目标：在明确边界内引入 LLM。
+
+模型服务选型：
+
+- P5 第一版优先直连 DeepSeek 官方 API，默认模型建议使用 `deepseek-v4-flash`。
+- 兜底模型保留 `deepseek-v4-pro`，只在 JSON 解析失败、低置信度样本、复杂 holdout 样本或人工指定时调用。
+- 当前不优先使用百炼等聚合平台；聚合平台的价值主要在后续企业 POC 的多模型切换、统一账单、企业采购、权限管理和云服务集成。
+- 代码层面仍按 OpenAI-compatible provider 设计，避免和某一家供应商强绑定。后续如需切到百炼、千问、Kimi、GLM，只改 `base_url`、`model`、`api_key` 等配置，不改业务流程。
+- API Key 不写入代码、不提交 Git，只通过本地环境变量或 `.env` 注入。
+
+建议配置：
+
+```text
+LLM_PROVIDER=deepseek
+LLM_BASE_URL=https://api.deepseek.com
+LLM_MODEL=deepseek-v4-flash
+LLM_FALLBACK_MODEL=deepseek-v4-pro
+LLM_API_KEY=...
+```
+
+未来如果改走百炼一类聚合平台，可切换为：
+
+```text
+LLM_PROVIDER=openai_compatible
+LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+LLM_MODEL=deepseek-v4-flash 或 qwen3.6-flash
+LLM_FALLBACK_MODEL=deepseek-v4-pro 或 qwen3.7-plus
+LLM_API_KEY=...
+```
 
 可引入的模型能力：
 
@@ -419,11 +481,15 @@ matched product + missing fields + risk flags
 2. 支持 mock provider，方便无 API key 时本地跑。
 3. 支持真实 provider，后续接入模型 API。
 4. 输出保留 prompt、输入、输出、模型名和耗时。
+5. 支持模型 fallback：默认便宜模型失败或置信度低时，再调用更强模型。
+6. 记录每次调用的 token usage、耗时、provider、model、是否 fallback，方便后续算成本和调优。
 
 验收标准：
 
 - 无模型 API 时系统仍可跑 baseline。
 - 有模型 API 时可增强草稿和字段抽取。
+- 默认模型失败时可以自动或手动切换 fallback 模型。
+- P2 default 不能回退；holdout 应输出新旧指标对比，判断 LLM 是否真的提升泛化能力。
 
 ## P6：最小 Web 工作台
 

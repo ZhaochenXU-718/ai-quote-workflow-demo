@@ -12,6 +12,7 @@ from backend.app.p1.candidate_retriever import (
     retrieve_product_candidates,
 )
 from backend.app.p3.evidence_retriever import retrieve_evidence
+from backend.app.p4.reply_generator import generate_reply_draft
 
 # TODO: These vocabularies are hardcoded only to make the first manufacturing
 # demo deterministic. Later they should come from industry config, customer
@@ -44,6 +45,16 @@ def run_pipeline_for_inquiry(inquiry: dict[str, Any], data: DemoData) -> dict[st
     risk_flags = detect_risks(extracted, line_item, candidates, rule_by_id, inquiry)
     clarification_questions = generate_clarification_questions(line_item, candidates, risk_flags)
     reply_policy = build_reply_policy(risk_flags)
+    reply_draft = generate_reply_draft(
+        inquiry=inquiry,
+        extracted_fields=extracted,
+        candidates=candidates,
+        evidence=evidence,
+        risk_flags=risk_flags,
+        clarification_questions=clarification_questions,
+        reply_policy=reply_policy,
+        email_templates=data.email_templates,
+    )
 
     return {
         "inquiry_id": inquiry["inquiry_id"],
@@ -62,6 +73,7 @@ def run_pipeline_for_inquiry(inquiry: dict[str, Any], data: DemoData) -> dict[st
         "risk_flags": risk_flags,
         "clarification_questions": clarification_questions,
         "reply_policy": reply_policy,
+        "reply_draft": reply_draft,
     }
 
 

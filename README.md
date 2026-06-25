@@ -3,9 +3,9 @@
 A deterministic backend pipeline + evaluation harness for the
 **manufacturing-export inquiry → quote** workflow: parse a customer inquiry,
 match candidate products, retrieve supporting evidence, flag quotation risks,
-and generate clarification questions — with risk rules kept as deterministic
-safety rails so the system never silently over-commits on price, delivery, or
-certification.
+generate clarification questions, and produce a controlled reply draft — with
+risk rules kept as deterministic safety rails so the system never silently
+over-commits on price, delivery, or certification.
 
 This is an early demo of the direction described in the planning docs:
 
@@ -74,8 +74,9 @@ backend/app/
   p1/                    # rule-based extraction, candidate retrieval, risk checks
   p2/evaluate.py         # precision/recall/F1 evaluation harness
   p3/evidence_retriever.py  # lightweight citation/evidence retrieval
+  p4/reply_generator.py  # controlled template-based reply drafts
 sample-data/manufacturing_export/
-  products/  inquiries/  quotes/  templates/  rules/  eval/  eval/holdout/
+  products/  inquiries/  templates/  rules/  eval/  eval/holdout/
 scripts/
   generate_manufacturing_export_data.py  # reproducible synthetic-data generator
 ```
@@ -88,3 +89,11 @@ requires exact matches on risk flags and missing fields (no misses **and** no
 false positives), because over-firing there means crying wolf or hallucinated
 clarifications; product candidates are recall-gated only, since retrieval may
 over-return for human review.
+
+## Reply drafts
+
+`run` output includes `reply_draft` with a customer-facing `subject` and `body`,
+plus internal `supporting_citations`, `blocked_commitments`, and `safety_notes`.
+The draft generator is template-based: it can ask for missing specs, flag
+delivery/certification review, and cite candidate product evidence, but it does
+not commit final price, delivery, certification, or final product selection.

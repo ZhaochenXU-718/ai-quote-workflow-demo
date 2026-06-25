@@ -62,7 +62,7 @@ Current version:
 - 12 synthetic product SKUs.
 - 12 product knowledge snippets.
 - 10 risk rules.
-- 5 email templates.
+- 6 email templates.
 - 50 synthetic inquiries.
 - 50 gold-answer records.
 
@@ -223,6 +223,7 @@ Current templates:
 - Missing Specification Clarification.
 - Delivery Confirmation Required.
 - Certification Confirmation Required.
+- Restricted Commitment Review Required.
 - Follow-up Email.
 
 Templates are for draft generation only. The system should still apply risk rules and require human approval before sending.
