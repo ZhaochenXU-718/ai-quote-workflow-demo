@@ -5,6 +5,7 @@ from typing import Any
 
 from backend.app.data.loaders import load_demo_data
 from backend.app.p1.rule_pipeline import run_pipeline_for_inquiry
+from backend.app.p4.draft_safety import check_reply_draft
 
 
 TOP_LEVEL_FIELDS = ["request_type", "customer_country", "application"]
@@ -63,8 +64,14 @@ def evaluate_one(prediction: dict[str, Any], gold: dict[str, Any]) -> dict[str, 
     )
     # Draft safety is an absolute invariant (not a gold comparison): the
     # customer-facing draft must never leak a price/commitment and must carry the
-    # guardrails its own policy requires. The pipeline already computed it.
-    draft_check = prediction["reply_draft"]["safety"]
+    # guardrails its own policy requires. Eval computes it here as a regression
+    # guard on the deterministic template draft (the pipeline no longer checks the
+    # template at runtime; it only checks LLM output).
+    draft_check = check_reply_draft(
+        prediction["reply_draft"],
+        prediction["reply_policy"],
+        prediction["risk_flags"],
+    )
 
     # Pass policy: field extraction must be exact; risk flags and missing fields
     # must match exactly (no misses AND no false positives), because over-firing

@@ -119,5 +119,31 @@ It never exposes internal SKU ids to the customer (those stay in the citations).
 it rejects any customer body that contains a price/currency amount or a
 first-person commitment, and requires the price/delivery/binding-commitment
 guardrails its policy calls for. The gate is independent of gold answers (a hard
-invariant, not a comparison) and is the same check P5 must run on any
-LLM-rewritten draft before it can be surfaced.
+invariant, not a comparison) and is the same check P5 runs on any LLM-rewritten
+draft before it can be surfaced.
+
+## LLM polishing (P5, optional)
+
+LLM enhancement is **off by default** — the pipeline and `eval` stay fully
+deterministic. Pass `--llm` to `run` to polish the draft through the model
+gateway ([model_gateway.py](backend/app/p5/model_gateway.py)):
+
+```bash
+# Mock provider — offline, deterministic, no API key (default LLM_PROVIDER):
+uv run python -m backend.app.cli run --llm INQ-SYN-001
+
+# Real DeepSeek — set the provider; key comes from .env (DEEPSEEK_API_KEY):
+LLM_PROVIDER=deepseek uv run python -m backend.app.cli run --llm INQ-SYN-001
+```
+
+The model output must pass the `draft_safety` gate (the only runtime safety
+check — the deterministic template is trusted and is regression-guarded in
+`eval` instead). If it fails, the violations are fed back to the model to revise
+(up to `LLM_MAX_REPAIR_ATTEMPTS` times); if it still fails, the draft falls back
+to the deterministic template and `reply_draft.polish.applied` is `false` with
+the reason and per-attempt detail. So an unsafe draft is never surfaced.
+
+Config via env / `.env`: `LLM_PROVIDER` (`mock`|`deepseek`), `LLM_MODEL`,
+`LLM_FALLBACK_MODEL`, `LLM_API_KEY` (or `DEEPSEEK_API_KEY`), `LLM_MAX_TOKENS`,
+`LLM_MAX_REPAIR_ATTEMPTS`. Verify a key with
+`uv run python scripts/check_deepseek_api.py`.

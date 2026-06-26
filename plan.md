@@ -440,12 +440,18 @@ python3 -m backend.app.cli run INQ-SYN-010
 
 ## P5：模型网关
 
+状态：进行中。第一增量（模型网关 + 草稿润色）已完成。
+
 目标：在明确边界内引入 LLM。
 
 模型服务选型：
 
 - P5 第一版优先直连 DeepSeek 官方 API，默认模型建议使用 `deepseek-v4-flash`。
 - 兜底模型保留 `deepseek-v4-pro`，只在 JSON 解析失败、低置信度样本、复杂 holdout 样本或人工指定时调用。
+- 注意 `deepseek-v4-*` 是推理模型：响应里思维链在 `reasoning_content`、最终答案在 `content`，两者分开；
+  `max_tokens` 把思维链也算进去。网关只取 `content` 用于业务（`reasoning_content` 只记日志/调试），
+  `max_tokens` 要留足空间避免被思维链吃光（验证脚本用 16 会得到空 `content`，已改为 256），
+  并按延迟/成本权衡是否需要思考模式。
 - 当前不优先使用百炼等聚合平台；聚合平台的价值主要在后续企业 POC 的多模型切换、统一账单、企业采购、权限管理和云服务集成。
 - 代码层面仍按 OpenAI-compatible provider 设计，避免和某一家供应商强绑定。后续如需切到百炼、千问、Kimi、GLM，只改 `base_url`、`model`、`api_key` 等配置，不改业务流程。
 - API Key 不写入代码、不提交 Git，只通过本地环境变量或 `.env` 注入。
@@ -492,11 +498,15 @@ LLM_API_KEY=...
 4. 输出保留 prompt、输入、输出、模型名和耗时。
 5. 支持模型 fallback：默认便宜模型失败或置信度低时，再调用更强模型。
 6. 记录每次调用的 token usage、耗时、provider、model、是否 fallback，方便后续算成本和调优。
-7. LLM 产出必须过确定性校验后才能采用：
-   - 草稿润色结果复用 `backend/app/p4/draft_safety.check_reply_draft`，违规（金额/承诺/缺护栏）即丢弃，回退模板版草稿或打回人工。
+7. LLM 产出必须过确定性校验后才能采用（运行时只此一处检测）：
+   - 草稿润色结果复用 `backend/app/p4/draft_safety.check_reply_draft`；违规（金额/承诺/缺护栏）时把违规明细
+     追加进 prompt 让模型重写（有限次），用尽仍不过则回退模板草稿。绝不透出不安全内容。
    - LLM 字段抽取结果仍要过 Schema/枚举/单位校验和正则兜底；风险规则始终在 LLM 之后再跑一遍。
-8. 落地前先对照 DeepSeek / 百炼官方 API 文档核实真实 model id 和定价——本节示例里的 `deepseek-v4-flash`、
-   `qwen3.6-flash` 等只是占位名，命名风格不一定对应各家真实型号，不要直接当配置用。
+8. model id 核实情况（对照 https://api-docs.deepseek.com/zh-cn/ ，2026-06）：
+   - DeepSeek 当前真实模型为 `deepseek-v4-flash`、`deepseek-v4-pro`；旧的 `deepseek-chat` / `deepseek-reasoner`
+     将于 2026/07/24 弃用（分别对应 v4-flash 的非思考/思考模式）。base_url `https://api.deepseek.com`，OpenAI 兼容。
+   - 百炼/千问那组 id（`qwen3.6-flash` 等）仍是占位名，切换前再去阿里云文档核实。
+   - 用 `scripts/check_deepseek_api.py` 可先验证 key、余额和一次最小推理调用是否通。
 
 验收标准：
 
@@ -509,6 +519,47 @@ LLM_API_KEY=...
   - LLM 增强路线主要看 holdout 的新旧指标对比来判断是否真的提升泛化能力；
     不能用 default 的精确匹配给 LLM 抽取打分——default gold 与 generator 同源，LLM 即使更准、
     只要字符串不同也会“回退”，那是套套逻辑而非真实退步。
+
+当前能力（第一增量）：
+
+- `backend/app/p5/model_gateway.py`：OpenAI 兼容网关，`ModelConfig` 从 env/`.env` 读配置，
+  `MockProvider`（离线确定性，echo 用户消息）+ `DeepSeekProvider`（stdlib urllib）+ 失败 fallback。
+  响应只取 `content`，`reasoning_content` 单独保留；记录 provider/model/latency/usage/used_fallback。
+- `backend/app/p5/reply_polish.py`：第一个接入能力是**草稿润色**。**LLM 只润色正文 `body_main`，确定性护栏
+  （价格/交期/承诺免责段）由我们在 LLM 之后再追加**——护栏不进 LLM 编辑范围，避免它换措辞导致"护栏缺失"的误拒。
+  安全检测**运行时只做一次，检最终草稿**（变量最大的是模型输出）；对 LLM 输出实际只强制负向不变量（不得加
+  金额/承诺），正向护栏因为是我们拼的，恒满足。模板草稿按构造可信、运行时不再重复检测。LLM 输出不过安全闸时
+  **不直接丢弃**，而是把"违反了哪些规则 + 细节"追加进对话**让模型重写**（`LLM_MAX_REPAIR_ATTEMPTS` 次，默认 1）；
+  重试用尽仍不过，才回退**模板草稿作为终极兜底**（绝不透出不安全内容）。`reply_draft.polish` 记录 `applied`、
+  `reason` 和逐次 `attempts`（含每次的 `safety_ok` 与 `violations`）。
+- 安全检测分层：**运行时**只检模型输出；**评测层（P2 eval）**独立对确定性模板草稿做 safety 检测，作为模板
+  回归保护（防止改模板/护栏时引入违规）。两者职责分开，运行时逻辑只有一处检测。
+- opt-in：pipeline 默认不调用 LLM（`gateway=None`）；CLI `run --llm` 才启用，默认 `LLM_PROVIDER=mock`。
+  因此 default eval 仍是纯确定性回归基线，不回退、不误花 API。
+
+配置（env / `.env`，key 不进 Git）：
+
+```text
+LLM_PROVIDER=mock           # 或 deepseek
+LLM_MODEL=deepseek-v4-flash
+LLM_FALLBACK_MODEL=deepseek-v4-pro
+LLM_API_KEY=...             # 或复用 DEEPSEEK_API_KEY
+LLM_MAX_TOKENS=1024         # 需含思维链
+LLM_MAX_REPAIR_ATTEMPTS=1   # 安全闸失败后让模型重写的次数（0=不重写直接回退模板）
+```
+
+运行命令：
+
+```bash
+uv run python -m backend.app.cli run --llm INQ-SYN-001                 # 默认 mock，离线
+LLM_PROVIDER=deepseek uv run python -m backend.app.cli run --llm INQ-SYN-001   # 真实 DeepSeek
+```
+
+当前边界 / 下一步：
+
+- 目前只接了草稿润色一个能力；字段抽取增强、澄清问题改写尚未接入。
+- `eval` 仍走确定性路径；LLM 路线的「holdout 新旧指标对比」还没做（下一增量）。
+- fallback 目前只在调用失败/空输出时触发；基于置信度的 fallback 待后续。
 
 ## P6：最小 Web 工作台
 

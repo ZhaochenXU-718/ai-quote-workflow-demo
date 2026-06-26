@@ -36,8 +36,12 @@ def generate_reply_draft(
         subject_template or "Re: {original_subject}",
         context,
     )
-    body = render_template(body_template, context)
-    body = append_policy_guardrails(body, risk_flags, reply_policy)
+    # body_main is the editable message; the policy guardrails are deterministic
+    # text appended after it. Keeping them separate lets P5 polish only body_main
+    # and re-append the exact guardrails, so the LLM is never responsible for
+    # preserving safety boilerplate verbatim.
+    body_main = render_template(body_template, context)
+    body = append_policy_guardrails(body_main, risk_flags, reply_policy)
 
     return {
         "status": "draft_requires_human_review",
@@ -45,6 +49,7 @@ def generate_reply_draft(
         "template_selection_reason": template_selection_reason(template_name, risk_flags),
         "subject": subject,
         "body": body,
+        "body_main": body_main,
         "supporting_citations": supporting_citations(evidence),
         "blocked_commitments": blocked_commitments(risk_flags, reply_policy),
         "safety_notes": safety_notes(risk_flags, reply_policy),

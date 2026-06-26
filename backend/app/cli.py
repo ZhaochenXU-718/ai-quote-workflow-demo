@@ -7,6 +7,7 @@ import sys
 from backend.app.p0.validate_data import validate_demo_data
 from backend.app.p1.rule_pipeline import run_inquiry_pipeline
 from backend.app.p2.evaluate import evaluate_all
+from backend.app.p5.model_gateway import build_gateway
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -22,6 +23,11 @@ def main(argv: list[str] | None = None) -> int:
     run_parser = subparsers.add_parser("run", help="Run rule-based P1 pipeline for one inquiry")
     run_parser.add_argument("inquiry_id", help="Inquiry ID, for example INQ-SYN-001")
     run_parser.add_argument("--holdout", action="store_true", help=holdout_help)
+    run_parser.add_argument(
+        "--llm",
+        action="store_true",
+        help="Enable P5 LLM draft polishing (provider via LLM_PROVIDER env, default mock)",
+    )
     eval_parser = subparsers.add_parser("eval", help="Evaluate P1 pipeline against gold answers")
     eval_parser.add_argument("--holdout", action="store_true", help=holdout_help)
     eval_parser.add_argument(
@@ -45,7 +51,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "run":
         try:
-            result = run_inquiry_pipeline(args.inquiry_id, dataset=dataset_from(args))
+            gateway = build_gateway() if args.llm else None
+            result = run_inquiry_pipeline(
+                args.inquiry_id, dataset=dataset_from(args), gateway=gateway
+            )
         except ValueError as error:
             print(f"Error: {error}", file=sys.stderr)
             return 1

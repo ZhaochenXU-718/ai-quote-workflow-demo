@@ -12,8 +12,8 @@ from backend.app.p1.candidate_retriever import (
     retrieve_product_candidates,
 )
 from backend.app.p3.evidence_retriever import retrieve_evidence
-from backend.app.p4.draft_safety import check_reply_draft
 from backend.app.p4.reply_generator import generate_reply_draft
+from backend.app.p5.reply_polish import polish_reply_draft
 
 # TODO: These vocabularies are hardcoded only to make the first manufacturing
 # demo deterministic. Later they should come from industry config, customer
@@ -27,13 +27,18 @@ def run_inquiry_pipeline(
     inquiry_id: str,
     root_dir: Path | None = None,
     dataset: str = "default",
+    gateway: Any = None,
 ) -> dict[str, Any]:
     data = load_demo_data(root_dir, dataset=dataset)
     inquiry = find_inquiry(data, inquiry_id)
-    return run_pipeline_for_inquiry(inquiry, data)
+    return run_pipeline_for_inquiry(inquiry, data, gateway=gateway)
 
 
-def run_pipeline_for_inquiry(inquiry: dict[str, Any], data: DemoData) -> dict[str, Any]:
+def run_pipeline_for_inquiry(
+    inquiry: dict[str, Any],
+    data: DemoData,
+    gateway: Any = None,
+) -> dict[str, Any]:
     product_by_id = {product["product_id"]: product for product in data.products}
     rule_by_id = {rule["id"]: rule for rule in data.risk_rules}
 
@@ -56,9 +61,12 @@ def run_pipeline_for_inquiry(inquiry: dict[str, Any], data: DemoData) -> dict[st
         reply_policy=reply_policy,
         email_templates=data.email_templates,
     )
-    # Run the deterministic safety gate on the rendered draft. P5 must run the
-    # same check on any LLM-rewritten draft before it can be surfaced.
-    reply_draft["safety"] = check_reply_draft(reply_draft, reply_policy, risk_flags)
+    # Single runtime safety check is on the LLM output only (the high-variance
+    # part), inside polish_reply_draft. The deterministic template draft is
+    # trusted by construction and regression-guarded in the P2 eval harness, so
+    # it is not re-checked here. Off by default (gateway is None).
+    if gateway is not None:
+        reply_draft = polish_reply_draft(reply_draft, reply_policy, risk_flags, gateway)
 
     return {
         "inquiry_id": inquiry["inquiry_id"],
