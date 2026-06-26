@@ -411,14 +411,23 @@ matched product + missing fields + risk flags
 - `reply_draft.supporting_citations` 优先使用 `matched_by=["candidate_product"]` 的 citation，避免把关键词补充资料误当成最终候选。
 - `reply_draft.blocked_commitments` 明确列出不能承诺的事项，例如 `final_price`、`requested_delivery`、`certification_confirmation`、`guarantee_or_binding_commitment`。
 - `reply_draft.safety_notes` 给内部人工审批使用，不混入客户邮件正文。
-- 当前 50 条 default 样本可触发 4 类模板：标准回复、缺参数回复、交期确认回复、认证确认回复。
+- 客户正文只用产品描述（名称+规格），不暴露内部 SKU id；`product_id` 仅保留在内部 `supporting_citations` 里。
+- default 样本可触发 5 类模板：标准回复、缺参数回复、交期确认回复、认证确认回复、过度承诺审查回复（restricted_claim）。
+- 新增确定性「草稿安全闸」`backend/app/p4/draft_safety.py`：对客户正文做不依赖 gold 的硬性校验——
+  正文不得出现金额/货币、不得有第一人称承诺（we guarantee/confirm/commit/...），且 policy 要求的护栏
+  （价格复核、交期复核、binding commitment 复核）必须在场。结果写入 `reply_draft.safety`，并接入 P2
+  pass 判定（`draft_safety_pass_rate` / `draft_safety_violation_inquiries`）。这道闸是 P5 LLM 输出必须复用的同一道。
 
 当前边界：
 
 - P4 仍然是模板填充，不做语言润色、语义改写或多语言回复。
 - `customer_name` 暂时固定为 `Customer`，后续需要从邮件签名、CRM 或人工输入中获取。
+- 模板按优先级单选：当多个风险并存（例如同时缺参数 + 认证不支持）时，正文只走最高优先级模板，
+  次要风险（如认证）只进 `blocked_commitments`，不一定出现在客户正文里。价格/交期/承诺三类靠
+  `append_policy_guardrails` 无条件补段兜底，认证暂未单独兜底。
 - 草稿只表达“潜在匹配”和“待确认事项”，不决定最终产品型号、最终价格、最终交期或认证可行性。
-- 后续 P5 可用 LLM 做措辞润色，但必须保留 `reply_policy`、`blocked_commitments` 和人工审批约束。
+- 后续 P5 可用 LLM 做措辞润色，但必须保留 `reply_policy`、`blocked_commitments`、人工审批约束，
+  并让 LLM 产出过同一道 `draft_safety` 安全闸，不通过即回退模板版或打回人工。
 
 运行命令：
 
@@ -483,13 +492,23 @@ LLM_API_KEY=...
 4. 输出保留 prompt、输入、输出、模型名和耗时。
 5. 支持模型 fallback：默认便宜模型失败或置信度低时，再调用更强模型。
 6. 记录每次调用的 token usage、耗时、provider、model、是否 fallback，方便后续算成本和调优。
+7. LLM 产出必须过确定性校验后才能采用：
+   - 草稿润色结果复用 `backend/app/p4/draft_safety.check_reply_draft`，违规（金额/承诺/缺护栏）即丢弃，回退模板版草稿或打回人工。
+   - LLM 字段抽取结果仍要过 Schema/枚举/单位校验和正则兜底；风险规则始终在 LLM 之后再跑一遍。
+8. 落地前先对照 DeepSeek / 百炼官方 API 文档核实真实 model id 和定价——本节示例里的 `deepseek-v4-flash`、
+   `qwen3.6-flash` 等只是占位名，命名风格不一定对应各家真实型号，不要直接当配置用。
 
 验收标准：
 
 - 无模型 API 时系统仍可跑 baseline。
 - 有模型 API 时可增强草稿和字段抽取。
 - 默认模型失败时可以自动或手动切换 fallback 模型。
-- P2 default 不能回退；holdout 应输出新旧指标对比，判断 LLM 是否真的提升泛化能力。
+- LLM 润色后的草稿仍 100% 通过 `draft_safety` 安全闸；任何违规都不会进入可发送草稿。
+- 指标判读要区分两条路：
+  - 确定性 baseline 仍跑 default 作回归基线（必须保持满分，含 draft_safety）。
+  - LLM 增强路线主要看 holdout 的新旧指标对比来判断是否真的提升泛化能力；
+    不能用 default 的精确匹配给 LLM 抽取打分——default gold 与 generator 同源，LLM 即使更准、
+    只要字符串不同也会“回退”，那是套套逻辑而非真实退步。
 
 ## P6：最小 Web 工作台
 

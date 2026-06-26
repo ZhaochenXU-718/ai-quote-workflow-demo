@@ -61,12 +61,16 @@ def evaluate_one(prediction: dict[str, Any], gold: dict[str, Any]) -> dict[str, 
         prediction["extracted_fields"],
         gold["gold_field_extraction"],
     )
+    # Draft safety is an absolute invariant (not a gold comparison): the
+    # customer-facing draft must never leak a price/commitment and must carry the
+    # guardrails its own policy requires. The pipeline already computed it.
+    draft_check = prediction["reply_draft"]["safety"]
 
     # Pass policy: field extraction must be exact; risk flags and missing fields
     # must match exactly (no misses AND no false positives), because over-firing
     # there means crying wolf or hallucinated clarifications. Product candidates
     # are recall-gated only, since the retrieval step is allowed to over-return
-    # for human review.
+    # for human review. The reply draft must pass the safety gate.
     passed = (
         field_check["accuracy"] == 1
         and product_check["all_gold_present"]
@@ -74,6 +78,7 @@ def evaluate_one(prediction: dict[str, Any], gold: dict[str, Any]) -> dict[str, 
         and risk_check["no_false_positives"]
         and missing_field_check["all_gold_present"]
         and missing_field_check["no_false_positives"]
+        and draft_check["ok"]
     )
 
     return {
@@ -83,6 +88,7 @@ def evaluate_one(prediction: dict[str, Any], gold: dict[str, Any]) -> dict[str, 
         "product_candidate_check": product_check,
         "risk_flag_check": risk_check,
         "missing_field_check": missing_field_check,
+        "draft_safety_check": draft_check,
     }
 
 
@@ -206,6 +212,7 @@ def summarize_results(results: list[dict[str, Any]]) -> dict[str, Any]:
     product = aggregate_set_metrics(results, "product_candidate_check")
     risk = aggregate_set_metrics(results, "risk_flag_check")
     missing = aggregate_set_metrics(results, "missing_field_check")
+    draft_safe = sum(1 for result in results if result["draft_safety_check"]["ok"])
 
     return {
         "total_inquiries": total,
@@ -225,6 +232,8 @@ def summarize_results(results: list[dict[str, Any]]) -> dict[str, Any]:
         "missing_field_recall": missing["recall"],
         "missing_field_f1": missing["f1"],
         "missing_field_false_positive_inquiries": missing["false_positive_inquiries"],
+        "draft_safety_pass_rate": safe_ratio(draft_safe, total),
+        "draft_safety_violation_inquiries": total - draft_safe,
     }
 
 

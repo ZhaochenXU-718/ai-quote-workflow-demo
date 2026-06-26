@@ -122,14 +122,16 @@ class SafeContext(dict):
 
 
 def matched_product_text(candidates: list[dict[str, str]]) -> str:
+    # Customer-facing text describes products by spec, never by internal SKU id.
+    # The product_id stays in the internal supporting_citations for the reviewer.
     if not candidates:
         return "no confirmed product candidate yet"
     labels = []
     for product in candidates[:2]:
         labels.append(
             (
-                f"{product['product_id']} ({product['product_name']}, "
-                f"{product['material']}, {product['size_range']}, "
+                f"{product['product_name']} "
+                f"({product['material']}, {product['size_range']}, "
                 f"{product['pressure_rating']}, {product['connection_type']} connection)"
             )
         )

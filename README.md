@@ -88,6 +88,7 @@ backend/app/
   p2/evaluate.py         # precision/recall/F1 evaluation harness
   p3/evidence_retriever.py  # lightweight citation/evidence retrieval
   p4/reply_generator.py  # controlled template-based reply drafts
+  p4/draft_safety.py     # deterministic safety gate for reply drafts
 sample-data/manufacturing_export/
   products/  inquiries/  templates/  rules/  eval/  eval/holdout/
 scripts/
@@ -101,7 +102,8 @@ candidates, and missing fields, plus false-positive counts. The pass gate
 requires exact matches on risk flags and missing fields (no misses **and** no
 false positives), because over-firing there means crying wolf or hallucinated
 clarifications; product candidates are recall-gated only, since retrieval may
-over-return for human review.
+over-return for human review. It also requires the reply draft to pass the
+safety gate (`draft_safety_pass_rate`).
 
 ## Reply drafts
 
@@ -110,3 +112,12 @@ plus internal `supporting_citations`, `blocked_commitments`, and `safety_notes`.
 The draft generator is template-based: it can ask for missing specs, flag
 delivery/certification review, and cite candidate product evidence, but it does
 not commit final price, delivery, certification, or final product selection.
+It never exposes internal SKU ids to the customer (those stay in the citations).
+
+`reply_draft.safety` is the result of a deterministic safety gate
+([draft_safety.py](backend/app/p4/draft_safety.py)) run on the rendered draft:
+it rejects any customer body that contains a price/currency amount or a
+first-person commitment, and requires the price/delivery/binding-commitment
+guardrails its policy calls for. The gate is independent of gold answers (a hard
+invariant, not a comparison) and is the same check P5 must run on any
+LLM-rewritten draft before it can be surfaced.

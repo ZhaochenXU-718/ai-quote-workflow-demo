@@ -12,6 +12,7 @@ from backend.app.p1.candidate_retriever import (
     retrieve_product_candidates,
 )
 from backend.app.p3.evidence_retriever import retrieve_evidence
+from backend.app.p4.draft_safety import check_reply_draft
 from backend.app.p4.reply_generator import generate_reply_draft
 
 # TODO: These vocabularies are hardcoded only to make the first manufacturing
@@ -55,6 +56,9 @@ def run_pipeline_for_inquiry(inquiry: dict[str, Any], data: DemoData) -> dict[st
         reply_policy=reply_policy,
         email_templates=data.email_templates,
     )
+    # Run the deterministic safety gate on the rendered draft. P5 must run the
+    # same check on any LLM-rewritten draft before it can be surfaced.
+    reply_draft["safety"] = check_reply_draft(reply_draft, reply_policy, risk_flags)
 
     return {
         "inquiry_id": inquiry["inquiry_id"],

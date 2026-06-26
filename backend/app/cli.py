@@ -148,6 +148,11 @@ def failure_reasons(result: dict) -> list[str]:
         reasons.append(f"missing fields not detected={missing_check['false_negatives']}")
     if missing_check["false_positives"]:
         reasons.append(f"missing-field false positives={missing_check['false_positives']}")
+
+    draft_check = result["draft_safety_check"]
+    if not draft_check["ok"]:
+        codes = [violation["code"] for violation in draft_check["violations"]]
+        reasons.append(f"draft safety violations={codes}")
     return reasons
 
 
