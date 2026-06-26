@@ -1,11 +1,18 @@
-# Project metadata and the Python version floor. This demo is not packaged for
-# `pip install` yet; run it as a module from the repo root (see README.md).
+# Python backend project config. Managed with uv (see README.md).
+# The environment is reproducible across machines via `.python-version`
+# (pins the interpreter) and `uv.lock` (pins dependencies). Run `uv sync`.
 [project]
 name = "ai-quote-workflow-demo"
 version = "0.1.0"
 description = "Manufacturing-export inquiry-to-quote AI workflow demo (deterministic P1 pipeline + evaluation harness)."
-requires-python = ">=3.9"
-# Intentionally empty: the backend pipeline and evaluation use only the Python
-# standard library. Add dependencies here (and pin a higher Python) before
-# introducing typed config, a model gateway client, or a web framework.
+requires-python = ">=3.12"
+# Runtime dependencies currently use only the Python standard library. Add
+# them here (e.g. an LLM client for P5) and run `uv lock` / `uv sync`.
 dependencies = []
+
+[dependency-groups]
+# Dev-only tooling. Install with `uv sync` (groups are installed by default).
+dev = []
+
+[tool.uv]
+package = false

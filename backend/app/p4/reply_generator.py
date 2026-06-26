@@ -113,7 +113,10 @@ def render_template(template: str, context: dict[str, str]) -> str:
     return template.format_map(SafeContext(context)).strip()
 
 
-class SafeContext(dict[str, str]):
+class SafeContext(dict):
+    # NOTE: base class must be plain `dict`, not `dict[str, str]` — a subscripted
+    # generic as a runtime base class breaks on Python 3.7/3.8. Annotations can
+    # still use dict[...] thanks to `from __future__ import annotations`.
     def __missing__(self, key: str) -> str:
         return "{" + key + "}"
 
